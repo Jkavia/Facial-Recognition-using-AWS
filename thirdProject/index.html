@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <style>
+        div.gallery {
+            margin: 5px;
+            border: 1px solid #ccc;
+            float: left;
+            width: 200px;
+        }
+        div.gallery:hover {
+            border: 1px solid #777;
+        }
+        div.gallery img {
+            width: 100%;
+            height: auto;
+        }
+        div.desc {
+            padding: 10px;
+            text-align: center;
+            font-size: 12px
+        }
+        div.source img {
+            width: 200px;
+            height: auto;
+        }
+    </style> 
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.85.0.min.js"></script>
+    <script>
+    $(document).ready(function(){
+        AWS.config.region = 'us-east-1';
+        AWS.config.credentials = new AWS.CognitoIdentityCredentials({
+            IdentityPoolId: 'us-east-1:0639fa24-90ec-48fe-8d47-d8a914746604',
+        });
+        var s3 = new AWS.S3({apiVersion: '2006-03-01'});
+        var lambda = new AWS.Lambda({apiVersion: '2015-03-31'});
+
+        $('#comparephoto').click(function(event) {
+            var files = $('#photoupload').prop('files');
+            if (!files.length) {
+               return alert('Please choose a file to upload!');
+            }
+            var file = files[0];
+            var employeeid = $("#employeeid").val();
+            if (employeeid == "") {
+                return alert('please enter employee id');
+            }
+            s3.upload({
+                Bucket: 'face-scan-janardan',
+                Key: file.name,
+                Body: file,
+                ACL: 'public-read'
+            }, function(err, data) {
+                console.log(data);
+                if (err) {
+                    return alert('Error:', err.message);
+                } else {
+                    //successfully uploaded photo
+                    var lambdaInput = { filename: file.name, employeeid: employeeid }
+                    var lambdaParams = {
+                        FunctionName: 'verifyface',
+                        InvocationType: 'RequestResponse',
+                        Payload: JSON.stringify(lambdaInput)
+                    };
+                    lambda.invoke(lambdaParams, function(err, data) {
+                        if (err) {
+                            return alert('Error invoking lambda: ', err.message);
+                        } else {
+                            $('#result').empty();
+                            if (data != null && data.Payload != null) {
+                                var output = JSON.parse(data.Payload);
+                                if (output.result !== null) {
+                                    var imageurl = 'https://s3.amazonaws.com/face-badges-janardan/' + employeeid + '.jpg';
+                                    var htmlelements = [
+                                    '<div><b>' + output.result + '</b></div>',
+                                    '<div><img src ="' + output.result + '.jpg" /></div>',
+                                    '<div class="gallery">',
+                                    '<a target="_blank" href="' + imageurl + '"><img src="' + imageurl +'"/></a>',
+                                    '</div>'
+                                    ]
+                                    var img = gethtml(htmlelements);
+                                    $(img).appendTo('#result');
+                                }
+                            }
+                        }
+                    });
+                }
+            });
+        });
+        function gethtml(elements) {
+          return elements.join('\n');
+        }
+        $('#photoupload').on("change", function(e){ 
+           $('#picture').attr('src',URL.createObjectURL(e.target.files[0]));
+           $('#result').empty();
+        });
+    });
+  </script>
+  </head>
+  <body>
+    <h1>Face Based Verification</h1>
+    <!--div class="booth" style="width:400px;background-color: #ccc;border: 10px solid #ddd;margin: 0 auto">
+        <video id="video" autoplay="true" muted="muted" width:"400" height:"300" ></video>
+    </div-->
+    <div>
+        Employee Id:
+        <input id="employeeid" type="text" />
+        Face Image: 
+        <input id="photoupload" type="file" accept="image/*;" capture="camera">
+        <button id="comparephoto">Compare Faces</button>
+        <br/><br/>
+        <div class="source"><img id="picture"/></div>
+    </div>
+    <hr/>
+    <br/>
+    <div id="result">
+    </div>
+    <script>
+    //     (function(){
+    //         var video = document.getElementById('video'),vendorUrl = window.URL || window.webkitURL;
+    //         navigator.getMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia || navigator.msGetUserMedia ;
+            
+    //         navigator.getMedia({
+    //             video:true,
+    //             audio:false
+    //           }, function(stream){
+    //               video.src=vendorUrl.createObjectURL(stream);
+    //       video.play();
+    //   },function(error){
+    //       //an error occured
+    //       console.log(error);
+    //       });
+    //     })();
+        </script>
+  </body>
+</html>

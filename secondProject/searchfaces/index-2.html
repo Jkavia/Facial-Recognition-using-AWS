@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <style>
+        div.gallery {
+            margin: 5px;
+            border: 1px solid #ccc;
+            float: left;
+            width: 250px;
+        }
+        div.gallery:hover {
+            border: 1px solid #777;
+        }
+        div.gallery img {
+            width: 100%;
+            height: auto;
+        }
+        div.desc {
+            padding: 10px;
+            text-align: center;
+            font-size:12px
+        }
+        div.source img {
+            width: 200px;
+            height: auto;
+        }
+    </style> 
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.85.0.min.js"></script>
+    <script>
+    $(document).ready(function(){
+        AWS.config.region = 'us-east-1';
+        AWS.config.credentials = new AWS.CognitoIdentityCredentials({
+            IdentityPoolId: 'us-east-1:8acd67a0-e2e6-4e15-8403-2afe2e614077',
+        });
+        var s3 = new AWS.S3({apiVersion: '2006-03-01'});
+
+        $('#upload').click(function(event) {
+            var files = $('#uploadphoto').prop('files');
+            if (!files.length) {
+               return alert('Please choose a file to upload!');
+            }
+            var file = files[0];
+            s3.upload({
+                    Bucket: 'faceindex-janardan',
+                    Key: file.name,
+                    Body: file,
+                    ACL: 'public-read'
+                }, function(err, data) {
+                    if (err) {
+                        return alert('Error uploading photo: ', err.message);
+                    }
+                    alert('Successfully uploaded photo.');
+            });
+        });
+        $('#search').click(function(event) {
+            var files = $('#searchphoto').prop('files');
+            if (!files.length) {
+               return alert('Please choose a file to upload for search!');
+            }
+            var file = files[0];
+            s3.upload({
+                    Bucket: 'face-search-janardan',
+                    Key: file.name,
+                    Body: file,
+                    ACL: 'public-read'
+                }, function(err, data) {
+                if (err) {
+                    return alert('Error uploading photo: ', err.message);
+                } else {
+                    //successfully uploaded photo - initiate face search
+                    var url =  ' https://5rrgerp07a.execute-api.us-east-1.amazonaws.com/dev?filename=' + file.name;
+                    $.get(url, function(data){
+                        $('#album-list').empty();
+                        $('<p>Search Results</p>').appendTo('#album-list');
+                        $.each(data.IDs, function(key, value) {
+                            var imageurl = 'https://s3.amazonaws.com/faceindex-janardan/' + value.ExternalImageId;
+                            var htmlelements = [
+                                '<div class="gallery">',
+                                '<a target="_blank" href="' + imageurl + '"><img src="' + imageurl +'"/></a>',
+                                '</div>'
+                            ]
+                            var img = gethtml(htmlelements);
+                            $(img).appendTo('#album-list');
+                        });
+                    });
+                }
+            });
+        });
+       function gethtml(elements) {
+          return elements.join('\n');
+       }
+       $('#uploadphoto').on("change", function(e){ 
+           $('#indexsource').attr('src',URL.createObjectURL(e.target.files[0]));
+        });
+        $('#searchphoto').on("change", function(e){ 
+           $('#searchsource').attr('src',URL.createObjectURL(e.target.files[0]));
+        }); 
+    });
+  </script>
+  </head>
+  <body>
+    <h1>Friends & Family Photo Search</h1>
+    <div><p>Upload</p>
+        <input id="uploadphoto" type="file" accept="image/*">
+        <button id="upload">Upload</button>
+        <br/><br/>
+        <div class="source"><img id="indexsource"/></div>
+    </div>
+    <hr/>
+    <br/>
+    <div><p>Search</p>
+        <input id="searchphoto" type="file" accept="image/*">
+        <button id="search">Search</button>
+        <br/><br/>
+        <div class="source"><img id="searchsource"/></div>
+    <div> 
+    <hr/>
+    <br/>       
+    <div id="album-list">
+    </div>
+  </body>
+</html>

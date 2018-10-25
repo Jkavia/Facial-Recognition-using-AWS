@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <style>
+        div.gallery {
+            margin: 5px;
+            border: 1px solid #ccc;
+            float: left;
+            width: 250px;
+        }
+
+        div.gallery:hover {
+            border: 1px solid #777;
+        }
+
+        div.gallery img {
+            width: 100%;
+            height: auto;
+        }
+
+        div.desc {
+            padding: 10px;
+            text-align: center;
+            font-size:12px
+        }
+    </style> 
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.85.0.min.js"></script>
+    <script>
+    $(document).ready(function(){
+        AWS.config.region = 'us-east-1';
+        AWS.config.credentials = new AWS.CognitoIdentityCredentials({
+            IdentityPoolId: 'us-east-1:8acd67a0-e2e6-4e15-8403-2afe2e614077',
+        });
+        var s3 = new AWS.S3({
+            apiVersion: '2006-03-01',
+            params: {Bucket: 'travel-app-janardan'}
+        });
+        
+        //update - get reference to Rekognition client
+        var rekognition = new AWS.Rekognition({apiVersion: '2016-06-27'});
+
+        $('#addphoto').click(function(event) {
+            var files = $('#photoupload').prop('files');
+            if (!files.length) {
+               return alert('Please choose a file to upload!');
+            }
+            var file = files[0];
+            //Updated section
+            var reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onloadend = function() {
+                var paramsModeration = {
+                    Image: {
+                        Bytes: getBinary(reader.result),
+                    }
+                };
+                //get moderation labels from Rekognition service
+                rekognition.detectModerationLabels(paramsModeration, function(err, data) {
+                    if (err) {
+                        alert('Error occured during Image Moderation');
+                        return;
+                    } 
+                    //fetch the parent moderation labels only - filter the rest
+                    if (data != null && data.ModerationLabels.length > 0) {  
+                        var parentLabels = data.ModerationLabels.filter(x=>x.ParentName=='').map(y=>y.Name);
+                        if (parentLabels.indexOf('Explicit Nudity') >= 0) {
+                            alert('Picture contains Partial or Explicit Nudity! - Sorry, Cannot upload!');
+                            return;
+                        } else {
+                            if (confirm('Picture contains Suggestive content. Are you sure you want to upload?') == false) {
+                               return;
+                            }
+                        }
+                    }
+                    s3.upload({
+                        Key: file.name,
+                        Body: file,
+                        ACL: 'public-read'
+                        }, function(err, data) {
+                            if (err) {
+                                return alert('Error uploading photo: ', err.message);
+                            }
+                            alert('Successfully uploaded photo.');
+                        });
+                });    
+            }
+        });
+        $('#search').click(function(event) {
+            var term = $('#searchtext').val();
+            if (!term) {
+                return alert('Please enter a search text!');
+            }
+            var url =  'https://29w4q3jbtj.execute-api.us-east-1.amazonaws.com/dev?search=' + term;
+            $.get(url, function(data){
+                $('#album-list').empty();
+                $.each(data, function(key, value) {
+                    var imageurl = value.title;
+                    var tags = value.tags.join(', ');
+                    var htmlelements = [
+                        '<div class="gallery">',
+                        '<a target="_blank" href="' + imageurl + '"><img src="' + imageurl +'"/></a>',
+                        '<div class="desc">' + tags + '</div>',
+                        '</div>'
+                    ]
+                    var img = gethtml(htmlelements);
+                    $(img).appendTo('#album-list');
+                });
+            });
+        });
+       function gethtml(elements) {
+          return elements.join('\n');
+       }
+       //Update
+       function getBinary(encodedFile) {
+            var base64Image = encodedFile.replace(/^data:image\/(png|jpeg|jpg);base64,/, "")
+            var binaryImg = atob(base64Image);
+            var length = binaryImg.length;
+            var ab = new ArrayBuffer(length);
+            var ua = new Uint8Array(ab);
+            for (var i = 0; i < length; i++) {
+                ua[i] = binaryImg.charCodeAt(i);
+            }
+            return ab;
+       }
+    });
+  </script>
+  </head>
+  <body>
+    <h1>Travel Photo Search - Image Moderation</h1>
+    <input id="photoupload" type="file" accept="image/*">
+    <button id="addphoto">Add Photo</button>
+    <br/>
+    <hr/>
+    <input type="text" id="searchtext" placeholder="Search..."/>
+    <button id="search">Search</button>
+    <br/>
+    <div id="album-list">
+    </div>
+  </body>
+</html>

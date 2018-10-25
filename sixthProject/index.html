@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <style>
+        div.desc {
+            padding: 0px;
+            text-align: left;
+            font-size:16px
+        }
+        div.source img {
+            width: 450px;
+            height: auto;
+        }
+    </style> 
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.85.0.min.js"></script>
+    <script>
+    $(document).ready(function(){
+        AWS.config.region = 'us-east-1';
+        AWS.config.credentials = new AWS.CognitoIdentityCredentials({
+            IdentityPoolId: 'us-east-1:8acd67a0-e2e6-4e15-8403-2afe2e614077',
+        });
+        //get reference to Rekognition client
+        var rekognition = new AWS.Rekognition({apiVersion: '2016-06-27'});
+        $('#checkphoto').click(function(event) {
+            var files = $('#selectphoto').prop('files');
+            if (!files.length) {
+               return alert('Please choose a file to upload!');
+            }
+            $('#album-list').empty();
+            var file = files[0];
+            var reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onloadend = function() {
+                var params = {
+                    Image: {
+                        Bytes: getBinary(reader.result),
+                    }
+                };
+                //Find celebrity
+                rekognition.recognizeCelebrities(params, function(err, data) {
+                    if (err) {
+                        alert('Error occured');
+                        return;
+                    } 
+                    //Iterate through the search results
+                    if (data != null && data.CelebrityFaces != null && data.CelebrityFaces.length > 0) {  
+                            $.each(data.CelebrityFaces, function(key, value) {
+                                var name = value.Name;
+                                var url = '';
+                                if (value.Urls != null && value.Urls.length > 0) {
+                                    url = value.Urls[0];
+                                }
+                                if (url=='') {
+                                    url = 'www.google.com/search?q=' + name;
+                                }
+                                var htmlelements = [
+                                    '<div class="desc">' + name ,
+                                    '<a target="_blank" href="http://' + url + '">[Learn More]</a>',
+                                    '</div>'
+                                ]
+                                var img = gethtml(htmlelements);
+                                $(img).appendTo('#album-list');
+                            });
+                    }
+                    else {
+                        alert('No celebrity detected!');
+                    }
+                });    
+            }
+        });
+       function gethtml(elements) {
+          return elements.join('\n');
+       }
+       $('#selectphoto').on("change", function(e){
+           $('#output').attr('src',URL.createObjectURL(e.target.files[0]));
+           $('#album-list').empty();
+        });
+       function getBinary(encodedFile) {
+            var base64Image = encodedFile.replace(/^data:image\/(png|jpeg|jpg);base64,/, "")
+            var binaryImg = atob(base64Image);
+            var length = binaryImg.length;
+            var ab = new ArrayBuffer(length);
+            var ua = new Uint8Array(ab);
+            for (var i = 0; i < length; i++) {
+                ua[i] = binaryImg.charCodeAt(i);
+            }
+            return ab;
+       }
+    });
+  </script>
+  </head>
+  <body>
+    <h1>Recognize Celebrities</h1>
+    <input id="selectphoto" type="file" accept="image/*">
+    <button id="checkphoto">Check</button>
+    <br/><br/>
+    <div class="source"><img id="output"/></div>
+    <div id="album-list">
+    </div>
+  </body>
+</html>

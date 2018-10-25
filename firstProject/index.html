@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <style>
+        div.gallery {
+            margin: 5px;
+            border: 1px solid #ccc;
+            float: left;
+            width: 200px;
+        }
+        div.gallery:hover {
+            border: 1px solid #777;
+        }
+        div.gallery img {
+            width: 100%;
+            height: auto;
+        }
+        div.desc {
+            padding: 10px;
+            text-align: center;
+            font-size:12px
+        }
+        div.source img {
+            width: 250px;
+            height: auto;
+        }
+    </style>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/js/bootstrap.min.js"></script>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.85.0.min.js"></script>
+    <script>
+    $(document).ready(function(){
+        AWS.config.region = 'us-east-1';
+        AWS.config.credentials = new AWS.CognitoIdentityCredentials({
+            IdentityPoolId: 'us-east-1:8acd67a0-e2e6-4e15-8403-2afe2e614077',
+        });
+        var s3 = new AWS.S3({
+            apiVersion: '2006-03-01',
+            params: {Bucket: 'detect-face-for-ad-janardan'}
+        });
+        $('#addphoto').click(function(event) {
+            var files = $('#photoupload').prop('files');
+            if (!files.length) {
+               return alert('Please choose a file to upload!');
+            }
+            var file = files[0];
+            s3.upload({
+                    Key: file.name,
+                    Body: file,
+                    ACL: 'public-read'
+                }, function(err, data) {
+                    if (err) {
+                        return alert('Error uploading photo: ', err);
+                    } else {
+                        //successfully uploaded photo
+                        var apiinvokeurl = 'https://cw0ew1zrq4.execute-api.us-east-1.amazonaws.com/dev';
+                        var url =  apiinvokeurl + '?filename=' + file.name;
+                        $.get(url, function(data){
+                            $('#album-list').empty();
+                            var imageurl = 'https://s3.amazonaws.com/targeted-ads-janardan/' + data;
+                            var htmlelements = [
+                                '<div class="gallery">',
+                                '<a target="_blank" href="' + imageurl + '"><img src="' + imageurl +'"/></a>',
+                                '</div>'
+                            ]
+                            var img = gethtml(htmlelements);
+                            $(img).appendTo('#album-list');
+                        });
+                    }
+            });
+        });
+       function gethtml(elements) {
+          return elements.join('\n');
+       }
+       $('#photoupload').on("change", function(e){
+           $('#output').attr('src',URL.createObjectURL(e.target.files[0]));
+           $('#album-list').empty();
+        });
+    });
+  </script>
+  </head>
+  <body>
+    <h1>Targeted Ad based on Facial, Demographic & Sentiment analysis</h1>
+    <div>
+        <input id="photoupload" type="file" accept="image/*">
+        <button class="btn-sm" id="addphoto">Fetch Advertisement</button>
+        <br/><br/>
+        <div class="source"><img id="output"/></div>
+    </div>
+    <hr/>
+    <br/>
+    <div id="album-list">
+    </div>
+  </body>
+</html>
